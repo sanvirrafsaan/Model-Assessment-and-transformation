@@ -1,0 +1,267 @@
+---
+title: "Assignment_2"
+author: "Rafsaan Sanvir"
+date: "2024-07-08"
+output: word_document
+---
+
+Let's do a residual analysis on the data in the datatrans.csv file, and process 
+the data in order to prepare it for linear regression analysis. 
+
+
+1a) Exploring the table & Printing the first 6 observations
+```{r}
+library(readr)
+setwd("/Users/user/Desktop/STAC67_summer/Assignment_2")
+datatrans <- read.csv("datatrans.csv")
+head(datatrans)
+```
+
+1b) Finding estimaated regression equation
+```{r}
+x = datatrans$x
+y = datatrans$y
+fit = lm (y~x)
+summary(fit)
+```
+Estimated regression equation is Yi = 0.1627 -0.0014x + error
+
+1c) Calculating predicted values and residuals. Creating table with x values, 
+y values, poredicted values and residuals. 
+
+```{r}
+ypredicted = fit$coefficients[1] + (fit$coefficients[2]*x)
+residuals = resid(fit)
+data = data.frame(
+  x_values = x,
+  y_values = y,
+  predicted_values = ypredicted,
+  Residuals = residuals
+)
+head(data)
+```
+
+d) Plotting and analyzing residuals: 
+```{r}
+plot(residuals~x)
+```
+Residuals are violating the constant variance assumption. It is also not clustered around 0. 
+Residuals are showing a pattern, all suggesting the model might not be a good fit. 
+Further tests need to be run in order to analyze residuals
+
+
+Constructing Normal Quantile plot: 
+```{r}
+qqnorm(residuals)
+```
+This graph does not follow a straight line, indicating that the residuals might not 
+be normally distributed. However, this is a visual representation, and other 
+statistical tests need to be ran in order to confirm this. Graph also seems to 
+indicate heavy tailed data. 
+
+Let's try a shapiro Wilk test to test whether the residuals came from a normally 
+distributed population, tested at significance level alpha = 0.05 : 
+```{r}
+shapiro.test(residuals)
+```
+since p value << alpha = 0.05, reject null hypothesis. In Shapiro-Wilk test, Null 
+hypotheis is that residuals are normally distributed, so we can conclude from 
+this test that residuals are not normally distributed. 
+
+g) Let's test whether errors have constant variance with the Brown-Forsythe test
+```{r}
+table = cbind(x, residuals)
+orderedbyx = table[order(x),] #reorders rows of table according to sorted order x
+eorderedbyx = orderedbyx[,2]
+n = nrow(table)
+n1 = ceiling(n/2)
+n2 = n - n1
+e1 = eorderedbyx[1:n1]
+e2 = eorderedbyx[(n1+1):n]
+med1 = median(e1) #find median of 
+med2 = median(e2)
+
+#find d1, d2 and sample means of d1, d2
+d1 = abs(e1 - med1) 
+d2 = abs(e2 - med2)
+dbar1 = mean(d1)
+dbar2 = mean(d2)
+
+#find test statistic and p value
+s_sq = (sum((d1-dbar1)^2) + sum((d2-dbar2)^2)) / (n-2) #s^2 formula
+tBF = (dbar1-dbar2) / sqrt(s_sq*((1/n1)+(1/n2)))
+p_value = 2*(1-pt(abs(tBF), n-2))
+p_value
+```
+Since p_value < alpha = 0.05, we reject Null hypothesis of the Brown-Forsythe 
+test which states that variance of erros are equal, concluding that the errors
+violate the constant variance assumption. 
+
+h) Let's improve the model by using Box-Cox transformation to find a better fit. 
+```{r}
+#Find MLE estimate of lambda
+library(MASS)
+bc = boxcox(y~x) #graph shows MLE estiamte close to -1.5
+lambda = bc$x[which.max(bc$y)] #"give me the value of x that maximizes y"
+lambda
+```
+
+i) We have lambda value, now we transform y
+```{r}
+K2 = prod(y)^(1/length(y))
+#new linear regression model according to 
+yt = ((y^lambda) - 1) /( lambda * (K2^(lambda-1))) 
+yt[1:6] #printing first 6 values of the transformed y
+```
+
+j) Let's plot this tranformed y
+```{r}
+transformed_model = lm(yt~x)
+model = fit
+plot(model$residuals~x)
+plot(transformed_model$residuals~x)
+```
+Transformed model's data is clustered around zero, demonstrates constant variance
+and no apparent patterns compared to original model. Indicates that transformed 
+model is a much fit for data than original model for linear regression analysis. 
+
+k) Plotting original vs transformed normal qq plot 
+```{r}
+qqnorm(fit$residuals, main = "Original data")
+qqnorm(transformed_model$residuals, main = "Box-Cox transformed model")
+```
+Box-Cox transformation model's data is much closer to a straight line than the 
+original model's data! meaning it is much closer to normal than the original model. 
+
+l) Using Shapiro Wilk for normality test of transformed model:
+```{r}
+shapiro.test(transformed_model$residuals)
+```
+Since p_value > alpha = 0.05, fail to reject null hypothesis that the residuals are 
+normally distributed, indicating that residuals follow normal distribution
+
+m) Brown-Forsythe Test For constant variance of error:
+```{r}
+table = cbind(x, transformed_model$residuals)
+orderedbyx = table[order(x),] #reorders rows of table according to sorted order x
+eorderedbyx = orderedbyx[,2]
+n = nrow(table)
+n1 = ceiling(n/2)
+n2 = n - n1
+e1 = eorderedbyx[1:n1]
+e2 = eorderedbyx[(n1+1):n]
+med1 = median(e1) #find median of 
+med2 = median(e2)
+
+#find d1, d2 and sample means of d1, d2
+d1 = abs(e1 - med1) 
+d2 = abs(e2 - med2)
+dbar1 = mean(d1)
+dbar2 = mean(d2)
+
+#find test statistic and p value
+s_sq = (sum((d1-dbar1)^2) + sum((d2-dbar2)^2)) / (n-2) #s^2 formula
+tBF = (dbar1-dbar2) / sqrt(s_sq*((1/n1)+(1/n2)))
+p_value = 2*(1-pt(abs(tBF), n-2))
+p_value
+```
+
+Since p_value > alpha = 0.05, reject null hypothesis that resiudals violate constant 
+variance assumption of residuals, concluding that residuals have constant variance
+
+We have a transformed model that can now be used for linear regression analysis! 
+
+______________________________________________________________________________________
+
+Now, let;s explore data in the arcsine csv file, containing relationship 
+between the dose (x) of an insecticide and the proportion of insects killed (y).
+
+2a) Explore data related to arcsine csv file.
+```{r}
+library(readr)
+setwd("/Users/user/Desktop/STAC67_summer/Assignment_2")
+arcsine <- read.csv("arcsineTr1.csv")
+x = arcsine$x
+y = arcsine$y
+plot(arcsine$x, arcsine$y)
+```
+There are multiple y values mapping to the given x values. The plot is also a 
+curved line, visually indicating a non-linear relationship. 
+
+b) fit regression model & create residual plot: 
+```{r}
+fit2 = lm(y~x)
+plot(x, fit2$residuals)
+```
+The residual plot is clustered around 0, but follows a clear pattern which indicates 
+a bad fit. Also violates constant variance assumptions at certain points of the graph. 
+
+c) i) Let's use y′ = arcsine(√y) transformation on data
+```{r}
+yt = asin(sqrt(y))
+plot(x, yt)
+
+```
+Still multiple y values mapping to one x, but the graph is no longer curved, 
+indicating a possible linear relationship
+
+c) Let's check if this transformed model is good to run linear regression. 
+```{r}
+model_transformed2 = lm(yt~x)
+plot(x, model_transformed2$residuals)
+
+```
+Compared to original residual plot, the residuals are scattered around 0, indicating 
+a mean of 0 which is good. Variance seems to be constant, and no patterns seem 
+to exist in the shape of the data, showing that the new model is a better fit 
+for the data. 
+
+__________________________________________________________________________________
+
+3a) The hospital.txt datafile contains relationship between hospital charges (y in dollars)
+and age (x in years). Let's fit two separate regression lines
+Yf = β0f + β1fxf + ϵf and Ym = β0m + β1mxm + ϵm for females and male patients.
+
+```{r}
+setwd("/Users/user/Desktop/STAC67_summer/Assignment_2")
+hospital = read.table("hospital.txt", header = TRUE)
+
+sex = hospital[,1]
+charge = hospital[,2]
+age = hospital[,3]
+hospital = cbind(sex, charge, age)
+hospital = as.data.frame(hospital)
+hospital = transform(hospital, charge = as.numeric(charge), age = as.numeric(age))
+female = subset(hospital, sex == "F")
+male = subset(hospital, sex == "M")
+female_model = lm(charge~age, data = female)
+male_model = lm(charge~age, data = male)
+summary(male_model)
+summary(female_model)
+```
+
+3bi) The difference in the average (i.e. mean) changes for females and
+males with the same age x = x0 is E(Yf |xf = x0) − E(Ym|xm = x0). This is
+estimated by ˆyf−ˆym and ˆyf−ˆym ∼ N(E(Yf |xf = x0)−E(Ym|xm = x0), kσ2).
+Let's calculate the value of k when x0 = 60
+```{r}
+x0 = 60
+n_f = nrow(female)
+n_m = nrow(male)
+
+xbar_f = mean(female$age)
+xbar_m = mean(male$age)
+sxx_f = sum((female$age - xbar_f)^2)
+sxx_m = sum((male$age - xbar_m)^2)
+
+k1 = ((1/n_f) + (((x0 - xbar_f)^2) / sxx_f)) #MSE not included
+k2 = ((1/n_m) + (((x0 - xbar_m)^2) / sxx_m)) #MSE not included 
+k = k1 + k2
+k
+
+```
+This equation is derived from expanding the equation of variance(yhat_female -yhat_male)
+= variance (yhat_female) + variance(yhat_male)
+= sigma^2* (k1) + sigma^2 * (k2) where equation for k1, k2 is in code above. 
+= sigma^2 (k1+k2), so k = k1+k2 according to the question. 
+
